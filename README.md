@@ -18,7 +18,7 @@ This tool adapts the core cryptographic mechanics found in hardware environments
 
 This tool requires **Python 3.6+** and the official Python `mnemonic` package.
 
-1. **Clone or save the script** as `secure_phrase_generator.py` on your computer.
+1. **Clone or save the script** as `bip39_mixer.py` on your computer.
 2. **Install the dependencies** via terminal:
    ```bash
    pip install mnemonic
@@ -45,19 +45,19 @@ The script exposes three arguments via the command line. You can mix and match p
 ### 1. Extend an Existing Seed Phrase with Physical Dice Rolls
 Combine a small phrase set or an existing backup directly with a fresh sequence of manual dice rolls:
 ```bash
-python3 secure_phrase_generator.py --seed_phrase "gravity, luxury, visual" --dice_rolls "61524361"
+python3 bip39_mixer.py --seed_phrase "gravity, luxury, visual" --dice_rolls "61524361"
 ```
 
 ### 2. Mix Two Independent Seed Phrases
 Blend two distinct phrase blocks together chronologically to construct a brand new combined seed:
 ```bash
-python3 secure_phrase_generator.py --seed_phrase "abandon ability able" --additional_seed "solar toggle vintage"
+python3 bip39_mixer.py --seed_phrase "abandon ability able" --additional_seed "solar toggle vintage"
 ```
 
 ### 3. Generate a Seed from Pure Dice Rolls Only
 Create a highly secure, completely random wallet without using any computer or mobile app RNG:
 ```bash
-python3 secure_phrase_generator.py --dice_rolls "55123461254316223145612456"
+python3 bip39_mixer.py --dice_rolls "55123461254316223145612456"
 ```
 
 ---
