@@ -63,8 +63,9 @@ python3 bip39_mixer.py --dice_rolls "55123461254316223145612456"
 ---
 
 ## 🔒 Security Best Practices for PC Execution
+**This script was designed as a poc only, use at your risk!!!**
 
-Because this script runs inside a desktop terminal loop instead of an isolated hardware secure element, observe the following absolute rules:
+Because this script runs inside a desktop terminal instead of an isolated hardware secure element, observe the following absolute rules:
 * **Air-gapped Environment**: For live production wallets, execute this script strictly on a clean, amnesic live-boot operating system (like TAILS) with all Wi-Fi and internet adapters entirely disconnected.
 * **Terminal Scrubbing**: Terminal windows cache history logs. After completing generation runs, fully flush or clear your terminal environment memory logs via commands like `history -c` or `clear` to prevent residual command parameters from resting in text configurations on your local disk.
 * **No Clipboard/Screenshots**: Do not copy-paste sensitive inputs or outputs using standard clipboard commands, as local monitoring software or background scripts can access temporary operating system clipboards easily.
