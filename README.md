@@ -4,6 +4,8 @@ A clean, standalone Python Command Line Interface (CLI) utility that securely ag
 
 This tool adapts the core cryptographic mechanics found in hardware environments into a generic script running entirely on a regular PC with zero platform-specific dependencies.
 
+The idea of this tool is to be able to use the entropy from seed phrases created by HWW, leveraging their hardware entropy  
+
 ---
 
 ## ⚙️ How It Works
