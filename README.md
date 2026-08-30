@@ -2,17 +2,17 @@
 
 A clean, standalone Python Command Line Interface (CLI) utility that securely aggregates user-supplied entropy sources (existing seed phrases, additional seed words, and physical dice rolls) to generate a fully compliant 24-word BIP-39 recovery mnemonic sentence.
 
-This tool adapts the core cryptographic mechanics found in hardware environments into a generic script running entirely on a regular PC with zero platform-specific dependencies.
+This tool adapts core cryptographic mechanics into a generic script running entirely on a regular PC with zero platform-specific dependencies. 
 
-The idea of this tool is to be able to use the entropy from seed phrases created by HWW, leveraging their hardware entropy  
+The primary purpose of this tool is to leverage high-quality hardware entropy (HWW) from existing seed phrases and mathematically bind it with secondary local entropy sources to derive an independent master pool.
 
 ---
 
 ## ⚙️ How It Works
 
-1. **Sequential Context Aggregation**: Unlike insecure mathematical accumulation ($A + B$), this program initializes a clean `SHA-256` hashing context stream. Every input—whether it is a string of dice rolls or the precise 11-bit index structure of a BIP-39 word (`struct.pack(">H")`)—is mixed sequentially into the cryptographic state buffer.
-2. **PBKDF2 Key-Stretching**: To protect against brute-force vulnerabilities common to custom user-generated entropy, the final aggregated byte stream is processed through a PBKDF2-HMAC-SHA256 loop with 2,048 iterations.
-3. **BIP-39 Mnemonic Formatting**: The stretched 32-byte (256-bit) entropy pool is evaluated against the official Bitcoin BIP-39 dictionary framework. The script calculates a standard 8-bit SHA-256 checksum byte, appends it to the entropy stream, splits the entire 264 bits into 24 distinct 11-bit chunks, and prints the finalized phrase sentence.
+1. **Domain-Separated Aggregation**: To prevent length-extension and collision vulnerabilities, inputs are chronologically structured using distinct byte boundaries (e.g., `[BASE_SEED_START]` and `[BASE_SEED_END]`). Raw strings, numerical paths, and 11-bit BIP-39 indexes (`struct.pack(">H")`) are cleanly isolated within the streaming context.
+2. **Cryptographic Extraction via HMAC-SHA256**: The redundant latency loops of PBKDF2 are removed. Because your hardware and physical inputs already yield high entropy, the script uses an **HKDF-Extract** methodology via a fixed-salt HMAC-SHA256 wrapper. This compresses variable-length, unevenly distributed user sequences into a uniform, unstretchable 256-bit entropy pool.
+3. **BIP-39 Mnemonic Formatting**: The extracted 32-byte (256-bit) entropy pool is passed directly to the standard library framework. The script automatically appends the standard 8-bit SHA-256 checksum, divides the consolidated 264 bits into 24 distinct 11-bit chunks, and prints the finalized phrase sentence.
 
 ---
 
@@ -20,8 +20,8 @@ The idea of this tool is to be able to use the entropy from seed phrases created
 
 This tool requires **Python 3.6+** and the official Python `mnemonic` package.
 
-1. **Clone or save the script** as `bip39_mixer.py` on your computer.
-2. **Install the dependencies** via terminal:
+1. **Save the script** as `bip39_mixer.py` on your computer.
+2. **Install the dependencies** via your terminal:
    ```bash
    pip install mnemonic
    ```
@@ -65,17 +65,17 @@ python3 bip39_mixer.py --dice_rolls "55123461254316223145612456"
 ---
 
 ## 🔒 Security Best Practices for PC Execution
-**This script was designed as a poc only, use at your risk!!!**
+**This script was designed as a Proof of Concept (PoC) only. Use at your own risk!**
 
-Because this script runs inside a desktop terminal instead of an isolated hardware secure element, observe the following absolute rules:
-* **Air-gapped Environment**: For live production wallets, execute this script strictly on a clean, amnesic live-boot operating system (like TAILS) with all Wi-Fi and internet adapters entirely disconnected.
+Because this script runs inside a desktop terminal instead of an isolated hardware secure element, observe the following absolute safety rules:
+* **Air-gapped Environment**: For live production wallets, execute this script strictly on a clean, amnesic live-boot operating system (like TAILS) with all Wi-Fi, Bluetooth, and internet adapters entirely disconnected.
 * **Terminal Scrubbing**: Terminal windows cache history logs. After completing generation runs, fully flush or clear your terminal environment memory logs via commands like `history -c` or `clear` to prevent residual command parameters from resting in text configurations on your local disk.
-* **No Clipboard/Screenshots**: Do not copy-paste sensitive inputs or outputs using standard clipboard commands, as local monitoring software or background scripts can access temporary operating system clipboards easily.
+* **No Clipboard/Screenshots**: Do not copy-paste sensitive inputs or outputs using standard clipboard commands. Local monitoring software, spyware, or background scripts can access temporary operating system clipboards easily.
 
 ---
 
 ## ⚖️ License & Compatibility
 
-This tool relies exclusively on public-domain, industry-wide internet standards (**RFC 2898**, **FIPS 180-4**, and **Bitcoin BIP-39**). Because it has been entirely stripped of proprietary firmware files, UI hooks, and vendor-specific configuration tags, it serves as an open-source standalone software utility. 
+This tool relies exclusively on public-domain, industry-wide internet standards (**RFC 5869 / HKDF**, **FIPS 180-4**, and **Bitcoin BIP-39**). Because it has been entirely stripped of proprietary firmware files, UI hooks, and vendor-specific configuration tags, it serves as an open-source standalone software utility. 
 
 Feel free to remix, adjust, and distribute this script under open-source software license conventions (such as MIT or GPLv3).
