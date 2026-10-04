@@ -10,9 +10,23 @@ The primary purpose of this tool is to leverage high-quality hardware entropy (H
 
 ## ⚙️ How It Works
 
-1. **Domain-Separated Aggregation**: To prevent length-extension and collision vulnerabilities, inputs are chronologically structured using distinct byte boundaries (e.g., `[BASE_SEED_START]` and `[BASE_SEED_END]`). Raw strings, numerical paths, and 11-bit BIP-39 indexes (`struct.pack(">H")`) are cleanly isolated within the streaming context.
-2. **Cryptographic Extraction via HMAC-SHA256**: The redundant latency loops of PBKDF2 are removed. Because your hardware and physical inputs already yield high entropy, the script uses an **HKDF-Extract** methodology via a fixed-salt HMAC-SHA256 wrapper. This compresses variable-length, unevenly distributed user sequences into a uniform, unstretchable 256-bit entropy pool.
-3. **BIP-39 Mnemonic Formatting**: The extracted 32-byte (256-bit) entropy pool is passed directly to the standard library framework. The script automatically appends the standard 8-bit SHA-256 checksum, divides the consolidated 264 bits into 24 distinct 11-bit chunks, and prints the finalized phrase sentence.
+1. **Domain‑Separated Entropy Aggregation**  
+   All entropy sources are wrapped in explicit byte boundaries (e.g., `[BASE_SEED_START]` and `[BASE_SEED_END]`).  
+   Each BIP‑39 word contributes both its dictionary index (`struct.pack(">H")`) and its UTF‑8 spelling.  
+   Dice rolls and additional seed words are similarly isolated, preventing ordering ambiguity, collision risks, and length‑extension vulnerabilities.
+
+2. **SeedSigner‑Style Dice Entropy (Base‑6 → Binary)**  
+   Physical dice rolls (`1`–`6`) are interpreted as digits in a base‑6 integer (`1→0`, `6→5`).  
+   The full sequence is converted into a big‑endian binary byte string, producing unbiased physical entropy suitable for HKDF input.
+
+3. **HKDF Extract + Expand Using Manual HMAC‑SHA256**  
+   Instead of PBKDF2 or Python’s `hmac` module, the script uses a manual HMAC‑SHA256 implementation identical to SeedSigner’s cryptographic primitives.  
+   HKDF‑Extract compresses all structured entropy into a pseudorandom key (PRK).  
+   HKDF‑Expand derives a uniform 32‑byte output keying material (OKM), forming the final 256‑bit entropy pool.
+
+4. **BIP‑39 Mnemonic Formatting**  
+   The 32‑byte entropy is passed directly to the official BIP‑39 library.  
+   The library appends the standard checksum, splits the 264 bits into 24 × 11‑bit indices, and outputs a fully compliant 24‑word recovery phrase.
 
 ---
 

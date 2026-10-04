@@ -2,17 +2,47 @@
 import sys
 import argparse
 import hashlib
-import hmac
 import struct
 import binascii
 from mnemonic import Mnemonic
 
-# Initialize the official BIP-39 library for English word mapping
 mnemo = Mnemonic("english")
 BIP39_WORDLIST = mnemo.wordlist
 
+# ---------------------------------------------------------------------------
+# SeedSigner-style manual HMAC-SHA256 (no Python hmac module)
+# ---------------------------------------------------------------------------
+def hmac_sha256(key: bytes, data: bytes) -> bytes:
+    block_size = 64  # SHA256 block size
+
+    if len(key) > block_size:
+        key = hashlib.sha256(key).digest()
+
+    key = key.ljust(block_size, b"\x00")
+
+    ipad = bytes((x ^ 0x36) for x in key)
+    opad = bytes((x ^ 0x5C) for x in key)
+
+    inner = hashlib.sha256(ipad + data).digest()
+    return hashlib.sha256(opad + inner).digest()
+
+# ---------------------------------------------------------------------------
+# SeedSigner-style HKDF (Extract + Expand) using HMAC-SHA256
+# ---------------------------------------------------------------------------
+def hkdf_extract(salt: bytes, ikm: bytes) -> bytes:
+    return hmac_sha256(salt, ikm)
+
+def hkdf_expand(prk: bytes, info: bytes, length: int) -> bytes:
+    # For 32 bytes, a single block is enough
+    if length > 32:
+        raise ValueError("This HKDF implementation only supports length <= 32")
+    t1 = hmac_sha256(prk, info + b"\x01")
+    return t1[:length]
+
+# ---------------------------------------------------------------------------
+# Utility functions
+# ---------------------------------------------------------------------------
 def word_to_index(word: str) -> int:
-    """Finds the precise index (0-2047) of a word in the official BIP-39 dictionary."""
     cleaned = word.strip().lower()
     try:
         return BIP39_WORDLIST.index(cleaned)
@@ -21,70 +51,102 @@ def word_to_index(word: str) -> int:
         sys.exit(1)
 
 def clean_word_list(phrase_str: str) -> list:
-    """Parses and sanitizes comma-delimited or space-delimited word strings."""
     if not phrase_str:
         return []
     delimit = ',' if ',' in phrase_str else ' '
     return [w.strip().lower() for w in phrase_str.split(delimit) if w.strip()]
 
+# ---------------------------------------------------------------------------
+# SeedSigner-style dice entropy: base-6 → base-2
+# Interpret dice rolls as a big base-6 integer, then convert to bytes.
+# ---------------------------------------------------------------------------
+def dice_to_entropy_bytes(dice_rolls: str) -> bytes:
+    """
+    Convert a sequence of dice rolls (chars '1'-'6') into entropy bytes
+    via base-6 → base-2 conversion (SeedSigner-style approach).
+    """
+    value = 0
+    for roll in dice_rolls:
+        if roll not in "123456":
+            print(f"[!] Error: Character '{roll}' is not a valid 1-6 die value.")
+            sys.exit(1)
+        digit = int(roll) - 1  # map 1-6 → 0-5
+        value = value * 6 + digit
+
+    # Convert big integer to big-endian bytes (minimal length)
+    if value == 0:
+        return b"\x00"
+
+    out = bytearray()
+    while value > 0:
+        out.insert(0, value & 0xFF)
+        value >>= 8
+    return bytes(out)
+
+# ---------------------------------------------------------------------------
+# SeedSigner-style HKDF-Extract over structured entropy
+# ---------------------------------------------------------------------------
 def calculate_mix_hkdf(seed_phrase: str, dice_rolls: str = None, additional_seed: str = None) -> bytes:
     """
-    Chronologically structures inputs with distinct field separation prefixes
-    and extracts a uniform 256-bit entropy pool using HMAC-SHA256 (HKDF Step 1).
+    SeedSigner-style HKDF (Extract + Expand) over structured entropy:
+    - base seed words (index + UTF-8)
+    - dice entropy (base-6 → base-2)
+    - additional seed words
     """
-    # A fixed, cryptographically strong salt acts as the HKDF Extract keying material
     hkdf_salt = b"UniversalEntropyMixerSaltV1"
-    hmac_ctx = hmac.new(hkdf_salt, msg=None, digestmod=hashlib.sha256)
-    
-    # Process Base Phrase state sequence
+    info = b"UniversalEntropyMixerHKDFv1"
+
+    msg = b""
+
+    # Base seed phrase
     words = clean_word_list(seed_phrase)
     if words:
         print(f"[*] Extracting base seed phrase ({len(words)} words)...")
-        # Domain separation to isolate data blocks clearly
-        hmac_ctx.update(b"[BASE_SEED_START]") 
+        msg += b"[BASE_SEED_START]"
         for word in words:
             word_idx = word_to_index(word)
-            hmac_ctx.update(struct.pack(">H", word_idx))
-            hmac_ctx.update(word.encode('utf-8'))
-        hmac_ctx.update(b"[BASE_SEED_END]")
-            
-    # Specification 1: Concatenated Dice Roll string mixing
+            msg += struct.pack(">H", word_idx)
+            msg += word.encode("utf-8")
+        msg += b"[BASE_SEED_END]"
+
+    # Dice rolls (base-6 → base-2 entropy)
     if dice_rolls:
         print(f"[*] Extracting dice data sequence: '{dice_rolls}'")
-        hmac_ctx.update(b"[DICE_ROLLS_START]")
-        for roll in dice_rolls:
-            if roll not in "123456":
-                print(f"[!] Error: Character '{roll}' is not a valid 1-6 die value.")
-                sys.exit(1)
-            hmac_ctx.update(roll.encode('utf-8'))
-        hmac_ctx.update(b"[DICE_ROLLS_END]")
-            
-    # Specification 2: Additional Seed Phrase processing
+        dice_entropy = dice_to_entropy_bytes(dice_rolls)
+        msg += b"[DICE_ROLLS_START]"
+        msg += dice_entropy
+        msg += b"[DICE_ROLLS_END]"
+
+    # Additional seed phrase
     if additional_seed:
         extra_words = clean_word_list(additional_seed)
         print(f"[*] Extracting additional seed sequence ({len(extra_words)} words)...")
-        hmac_ctx.update(b"[ADDITIONAL_SEED_START]")
+        msg += b"[ADDITIONAL_SEED_START]"
         for word in extra_words:
             word_idx = word_to_index(word)
-            hmac_ctx.update(struct.pack(">H", word_idx))
-            hmac_ctx.update(word.encode('utf-8'))
-        hmac_ctx.update(b"[ADDITIONAL_SEED_END]")
+            msg += struct.pack(">H", word_idx)
+            msg += word.encode("utf-8")
+        msg += b"[ADDITIONAL_SEED_END]"
 
-    return hmac_ctx.digest()
+    # HKDF Extract
+    prk = hkdf_extract(hkdf_salt, msg)
+    # HKDF Expand to 32 bytes
+    okm = hkdf_expand(prk, info, 32)
+    return okm
 
+# ---------------------------------------------------------------------------
+# BIP-39 mnemonic generation
+# ---------------------------------------------------------------------------
 def generate_bip39_phrase(pure_entropy: bytes) -> str:
-    """
-    Accepts 32-bytes of pure, uniform entropy and converts it into a complete
-    24-word BIP-39 recovery phrase sentence.
-    """
     print("[*] Processing entropy directly into a 24-word mnemonic...")
-    # This automatically splits the 256 bits into 11-bit chunks, appends the
-    # 8-bit checksum, and joins them into a single string.
     return mnemo.to_mnemonic(pure_entropy)
 
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(
-        description="Universal Secure Entropy Mixer & 24-Word Recovery Phrase Generator"
+        description="Universal Secure Entropy Mixer (SeedSigner-style HKDF & dice) & 24-Word Recovery Phrase Generator"
     )
     
     parser.add_argument('--seed_phrase', type=str, default="", help="Base seed phrase (comma or space split).")
@@ -98,21 +160,18 @@ def main():
         print("\n[!] Error: You must supply a --seed_phrase, --dice_rolls, or both.")
         sys.exit(1)
 
-    # 1. Uniform Cryptographic Extraction (Replaced standard hash & PBKDF2 stretching)
     pure_entropy = calculate_mix_hkdf(
-        seed_phrase=args.seed_phrase, 
-        dice_rolls=args.dice_rolls, 
+        seed_phrase=args.seed_phrase,
+        dice_rolls=args.dice_rolls,
         additional_seed=args.additional_seed
     )
-    
-    # 2. Direct Mnemonic Generation
+
     final_phrase = generate_bip39_phrase(pure_entropy)
     entropy_hex_str = binascii.hexlify(pure_entropy).decode('ascii')
-    
-    # 3. Formatted Terminal Report Output
+
     print("\n" + "="*70)
-    print(f"🔒 UNIFORM MASTER ENTROPY HEX (32-bytes):")
-    print(f"{entropy_hex_str}")
+    print("🔒 UNIFORM MASTER ENTROPY HEX (32 bytes):")
+    print(entropy_hex_str)
     print("-"*70)
     print("📋 FINAL COMPLETED 24-WORD RECOVERY STRING:")
     print(f"\n{final_phrase}\n")
